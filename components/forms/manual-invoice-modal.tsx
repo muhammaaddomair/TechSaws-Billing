@@ -4,13 +4,12 @@ import { useEffect, useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Edit, Mail, Printer, PlusCircle, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useFieldArray, useForm } from "react-hook-form";
 import { saveManualInvoice, sendInvoiceEmail } from "@/lib/actions";
 import { manualInvoiceSchema, type ManualInvoiceInput } from "@/validators/invoice";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/utils";
 
@@ -23,6 +22,21 @@ function todayValue() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function defaultInvoiceNumber() {
+  return `INV-${Date.now().toString().slice(-6)}`;
+}
+
+const emptyItem = {
+  description: "",
+  quantity: 1,
+  unitPrice: 0,
+  amount: 0
+};
+
+function roundMoney(value: number) {
+  return Number((Number.isFinite(value) ? value : 0).toFixed(2));
+}
+
 export function ManualInvoiceModal({ mode = "create", defaultValues }: ManualInvoiceModalProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -32,72 +46,91 @@ export function ManualInvoiceModal({ mode = "create", defaultValues }: ManualInv
     resolver: zodResolver(manualInvoiceSchema),
     defaultValues: {
       id: defaultValues?.id,
+      invoiceNumber: defaultValues?.invoiceNumber ?? defaultInvoiceNumber(),
       clientName: defaultValues?.clientName ?? "",
       email: defaultValues?.email ?? "",
       companyName: defaultValues?.companyName ?? "",
-      totalProjectCost: defaultValues?.totalProjectCost ?? 0,
-      advancePercent: defaultValues?.advancePercent ?? 0,
-      advanceAmount: defaultValues?.advanceAmount ?? 0,
-      timeline: "",
-      projectType: defaultValues?.projectType ?? "",
-      chargeType: defaultValues?.chargeType ?? "DEVELOPMENT",
-      billingMode: defaultValues?.billingMode ?? "ONE_TIME",
-      paidAmount: defaultValues?.paidAmount ?? 0,
       issueDate: defaultValues?.issueDate ?? new Date(),
-      notes: defaultValues?.notes ?? ""
+      dueDate: defaultValues?.dueDate,
+      notes: defaultValues?.notes ?? "",
+      bankName: defaultValues?.bankName ?? "",
+      accountName: defaultValues?.accountName ?? "",
+      accountNumber: defaultValues?.accountNumber ?? "",
+      iban: defaultValues?.iban ?? "",
+      subtotal: defaultValues?.subtotal ?? 0,
+      taxPercent: defaultValues?.taxPercent ?? 0,
+      discountAmount: defaultValues?.discountAmount ?? 0,
+      totalAmount: defaultValues?.totalAmount ?? 0,
+      items: defaultValues?.items?.length ? defaultValues.items : [emptyItem]
     }
   });
-  const totalProjectCost = Number(form.watch("totalProjectCost")) || 0;
-  const advancePercent = Number(form.watch("advancePercent")) || 0;
-  const advanceAmount = Number(form.watch("advanceAmount")) || 0;
-  const paidAmount = Number(form.watch("paidAmount")) || 0;
-  const chargeType = form.watch("chargeType");
-  const billingMode = form.watch("billingMode");
-  const serviceTax = chargeType === "SUBSCRIPTION" && billingMode === "MONTHLY" ? totalProjectCost * 0.2 : 0;
-  const invoiceTotal = totalProjectCost + serviceTax;
+  const { fields, append, remove } = useFieldArray({ control: form.control, name: "items" });
+  const watchedItems = form.watch("items");
+  const watchedTaxPercent = Number(form.watch("taxPercent")) || 0;
+  const watchedDiscount = Number(form.watch("discountAmount")) || 0;
+  const calculatedSubtotal = roundMoney(
+    (watchedItems ?? []).reduce((sum, item) => {
+      const quantity = Number(item.quantity) || 0;
+      const unitPrice = Number(item.unitPrice) || 0;
+      return sum + quantity * unitPrice;
+    }, 0)
+  );
+  const calculatedTax = roundMoney(calculatedSubtotal * (watchedTaxPercent / 100));
+  const calculatedTotal = Math.max(0, roundMoney(calculatedSubtotal + calculatedTax - watchedDiscount));
 
   useEffect(() => {
-    const computedAmount = totalProjectCost * (advancePercent / 100);
-    if (Number.isFinite(computedAmount) && Math.abs(computedAmount - advanceAmount) > 0.01) {
-      form.setValue("advanceAmount", Number(computedAmount.toFixed(2)), { shouldValidate: false });
-    }
-  }, [advanceAmount, advancePercent, form, totalProjectCost]);
+    const items = watchedItems ?? [];
+    let subtotal = 0;
 
-  const updatePercentFromAmount = (value: string) => {
-    const amount = Number(value) || 0;
-    form.setValue("advanceAmount", amount);
-    form.setValue("advancePercent", totalProjectCost > 0 ? Number(((amount / totalProjectCost) * 100).toFixed(2)) : 0);
-  };
+    items.forEach((item, index) => {
+      const quantity = Number(item.quantity) || 0;
+      const unitPrice = Number(item.unitPrice) || 0;
+      const amount = roundMoney(quantity * unitPrice);
+      subtotal += amount;
+
+      if (Number(item.amount) !== amount) {
+        form.setValue(`items.${index}.amount`, amount, { shouldDirty: true, shouldValidate: false });
+      }
+    });
+
+    const roundedSubtotal = roundMoney(subtotal);
+    const total = roundMoney(roundedSubtotal + roundedSubtotal * (watchedTaxPercent / 100) - watchedDiscount);
+
+    if (Number(form.getValues("subtotal")) !== roundedSubtotal) {
+      form.setValue("subtotal", roundedSubtotal, { shouldDirty: true, shouldValidate: false });
+    }
+
+    if (Number(form.getValues("totalAmount")) !== total) {
+      form.setValue("totalAmount", Math.max(0, total), { shouldDirty: true, shouldValidate: false });
+    }
+  }, [form, watchedDiscount, watchedItems, watchedTaxPercent]);
 
   const onSubmit = form.handleSubmit((values) => {
     setMessage(null);
     startTransition(async () => {
-      const result = await saveManualInvoice({
-        ...values,
-        advanceAmount,
-        advancePercent,
-        paidAmount,
-        totalProjectCost
-      });
+      const result = await saveManualInvoice(values);
       setMessage(result.message);
       if (result.success) {
         setOpen(false);
         router.refresh();
         if (mode === "create") {
           form.reset({
+            invoiceNumber: defaultInvoiceNumber(),
             clientName: "",
             email: "",
             companyName: "",
-            totalProjectCost: 0,
-            advancePercent: 0,
-            advanceAmount: 0,
-            timeline: "",
-            projectType: "",
-            chargeType: "DEVELOPMENT",
-            billingMode: "ONE_TIME",
-            paidAmount: 0,
             issueDate: new Date(),
-            notes: ""
+            dueDate: undefined,
+            notes: "",
+            bankName: "",
+            accountName: "",
+            accountNumber: "",
+            iban: "",
+            subtotal: 0,
+            taxPercent: 0,
+            discountAmount: 0,
+            totalAmount: 0,
+            items: [emptyItem]
           });
         }
       }
@@ -130,6 +163,9 @@ export function ManualInvoiceModal({ mode = "create", defaultValues }: ManualInv
             <form className="grid gap-5" onSubmit={onSubmit}>
               <input type="hidden" {...form.register("id")} />
               <div className="grid gap-4 md:grid-cols-3">
+                <Field error={form.formState.errors.invoiceNumber?.message} label="Invoice #">
+                  <Input {...form.register("invoiceNumber")} placeholder="INV-001" />
+                </Field>
                 <Field error={form.formState.errors.clientName?.message} label="Client name">
                   <Input {...form.register("clientName")} placeholder="Client contact name" />
                 </Field>
@@ -139,51 +175,72 @@ export function ManualInvoiceModal({ mode = "create", defaultValues }: ManualInv
                 <Field error={form.formState.errors.companyName?.message} label="Company name">
                   <Input {...form.register("companyName")} placeholder="Company LLC" />
                 </Field>
-                <Field error={form.formState.errors.totalProjectCost?.message} label="Total project cost">
-                  <Input min="0" step="0.01" type="number" {...form.register("totalProjectCost")} />
-                </Field>
-                <Field error={form.formState.errors.advancePercent?.message} label="Advance %">
-                  <Input min="0" max="100" step="0.01" type="number" {...form.register("advancePercent")} />
-                </Field>
-                <Field error={form.formState.errors.advanceAmount?.message} label="Advance amount">
-                  <Input min="0" step="0.01" type="number" value={advanceAmount} onChange={(event) => updatePercentFromAmount(event.target.value)} />
-                </Field>
-                <Field error={form.formState.errors.projectType?.message} label="Project type">
-                  <Input {...form.register("projectType")} placeholder="Website, SaaS tool, support retainer" />
-                </Field>
-                <Field label="Charge category">
-                  <Select {...form.register("chargeType")}>
-                    <option value="SUBSCRIPTION">Subscription</option>
-                    <option value="DEVELOPMENT">Software</option>
-                    <option value="MAINTENANCE">Support charges</option>
-                  </Select>
-                </Field>
-                <Field label="Billing">
-                  <Select {...form.register("billingMode")}>
-                    <option value="ONE_TIME">One-time</option>
-                    <option value="MONTHLY">Monthly subscription</option>
-                  </Select>
-                </Field>
-                <Field label="Paid manually">
-                  <Input min="0" step="0.01" type="number" {...form.register("paidAmount")} />
-                </Field>
                 <Field label="Issue date">
                   <Input defaultValue={todayValue()} type="date" {...form.register("issueDate")} />
                 </Field>
                 <Field label="Due date">
                   <Input type="date" {...form.register("dueDate")} />
                 </Field>
+                <Field error={form.formState.errors.taxPercent?.message} label="Tax %">
+                  <Input min="0" step="0.01" type="number" {...form.register("taxPercent")} />
+                </Field>
+                <Field error={form.formState.errors.discountAmount?.message} label="Discount">
+                  <Input min="0" step="0.01" type="number" {...form.register("discountAmount")} />
+                </Field>
+              </div>
+              <input type="hidden" {...form.register("subtotal")} />
+              <input type="hidden" {...form.register("totalAmount")} />
+
+              <div className="grid gap-3 rounded-[28px] bg-[#f7f2ec] p-5 sm:grid-cols-4">
+                <Summary label="Subtotal" value={formatCurrency(calculatedSubtotal)} />
+                <Summary label="Tax" value={formatCurrency(calculatedTax)} />
+                <Summary label="Discount" value={formatCurrency(watchedDiscount)} />
+                <Summary label="Total" value={formatCurrency(calculatedTotal)} />
               </div>
 
-              <div className="grid gap-4 rounded-[28px] bg-[#f7f2ec] p-5 md:grid-cols-4">
-                <Summary label="Project cost" value={formatCurrency(totalProjectCost)} />
-                <Summary label="Service tax" value={formatCurrency(serviceTax)} />
-                <Summary label="Invoice total" value={formatCurrency(invoiceTotal)} />
-                <Summary label="Remaining" value={formatCurrency(Math.max(0, invoiceTotal - paidAmount))} />
+              <div className="grid gap-4 rounded-[28px] bg-[#f7f2ec] p-5 md:grid-cols-2">
+                <Field label="Bank name">
+                  <Input {...form.register("bankName")} />
+                </Field>
+                <Field label="Account name">
+                  <Input {...form.register("accountName")} />
+                </Field>
+                <Field label="Account number">
+                  <Input {...form.register("accountNumber")} />
+                </Field>
+                <Field label="IBAN">
+                  <Input {...form.register("iban")} />
+                </Field>
+              </div>
+
+              <div className="grid gap-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-slate-900">Invoice items</h3>
+                  <Button onClick={() => append(emptyItem)} type="button" variant="ghost">Add item</Button>
+                </div>
+                <div className="grid gap-3">
+                  {fields.map((field, index) => (
+                    <div className="grid gap-3 rounded-2xl bg-[#fbfaf8] p-4 md:grid-cols-[1fr_100px_140px_auto]" key={field.id}>
+                      <Field error={form.formState.errors.items?.[index]?.description?.message} label={`Description ${index + 1}`}>
+                        <Input {...form.register(`items.${index}.description`)} />
+                      </Field>
+                      <Field error={form.formState.errors.items?.[index]?.quantity?.message} label="QTY">
+                        <Input min="0" step="0.01" type="number" {...form.register(`items.${index}.quantity`)} />
+                      </Field>
+                      <Field error={form.formState.errors.items?.[index]?.unitPrice?.message} label="Unit price">
+                        <Input min="0" step="0.01" type="number" {...form.register(`items.${index}.unitPrice`)} />
+                      </Field>
+                      <input type="hidden" {...form.register(`items.${index}.amount`)} />
+                      <button className="self-end rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-600 disabled:opacity-50" disabled={fields.length === 1} onClick={() => remove(index)} type="button">
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <Field label="Notes">
-                <Textarea {...form.register("notes")} placeholder="Manual instructions, terms, or internal context" />
+                <Textarea {...form.register("notes")} placeholder="Invoice notes" />
               </Field>
 
               {message ? <p className="rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-700">{message}</p> : null}
@@ -212,7 +269,7 @@ export function InvoiceEmailButton({ invoiceId }: { invoiceId: string }) {
         type="button"
         variant="ghost"
       >
-        <Mail className="mr-2 h-4 w-4" />
+        <Mail className="mr-2 h-4 w-4 shrink-0" />
         Send email
       </Button>
       {message ? <span className="max-w-[220px] text-xs text-slate-500">{message}</span> : null}
@@ -232,7 +289,7 @@ export function InvoicePdfLink({ href }: { href: string }) {
 function Summary({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl bg-white px-4 py-3">
-      <p className="text-sm text-slate-500">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p>
       <p className="mt-1 text-lg font-semibold text-slate-950">{value}</p>
     </div>
   );

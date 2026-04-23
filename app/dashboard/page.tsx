@@ -1,10 +1,9 @@
-import Link from "next/link";
 import type { Route } from "next";
 import { BarChart3, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { getDashboardOverview } from "@/lib/data";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -39,16 +38,14 @@ export default async function DashboardPage() {
         </div>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard label="Total clients" value={overview.clientCount.toString()} />
         <SummaryCard label="Active projects" value={overview.activeProjects.toString()} />
         <SummaryCard label="Monthly revenue" value={formatCurrency(overview.monthlyRevenue)} />
-        <SummaryCard label="MRR" value={formatCurrency(overview.monthlyRecurringRevenue)} />
         <SummaryCard label="Outstanding" value={formatCurrency(overview.outstandingInvoices)} tone={overview.outstandingInvoices > 0 ? "warning" : "success"} />
         <SummaryCard label="Overdue invoices" value={overview.overdueInvoicesCount.toString()} tone={overview.overdueInvoicesCount > 0 ? "danger" : "success"} />
         <SummaryCard label="Monthly costs" value={formatCurrency(overview.monthlyCosts)} />
         <SummaryCard label="Estimated profit" value={formatCurrency(overview.estimatedMonthlyProfit)} tone={overview.estimatedMonthlyProfit >= 0 ? "success" : "danger"} />
-        <SummaryCard label="Upcoming renewals" value={overview.upcomingRenewalsCount.toString()} />
         <SummaryCard label="Projects at risk" value={overview.delayedProjectsCount.toString()} tone={overview.delayedProjectsCount > 0 ? "danger" : "success"} />
       </div>
 
@@ -60,9 +57,9 @@ export default async function DashboardPage() {
                 <TrendingUp className="h-3.5 w-3.5" />
                 Business Overview
               </div>
-              <h2 className="text-3xl font-semibold tracking-tight text-ink">Revenue, costs, profit, and operational risk.</h2>
+              <h2 className="text-3xl font-semibold tracking-tight text-ink">Revenue, costs, profit, and project risk.</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                Values are computed from invoices, payments, assets, revenue records, and costs. No payment gateway is assumed.
+                Values are computed from invoices, payments, revenue records, and costs. No payment gateway is assumed.
               </p>
             </div>
           </div>
@@ -93,46 +90,11 @@ export default async function DashboardPage() {
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-3">
-        <Card>
-          <SectionHeader title="Upcoming renewals" count={overview.upcomingRenewals.length} />
-          <div className="grid gap-3">
-            {overview.upcomingRenewals.length === 0 ? <Empty text="No renewals due soon." /> : overview.upcomingRenewals.map((asset) => (
-              <MiniRow key={asset.id} href={`/dashboard/assets/${asset.id}` as Route} label={`${asset.name} · ${asset.client.companyName}`} value={asset.renewalDate ? formatDate(asset.renewalDate) : "No date"} />
-            ))}
-          </div>
-        </Card>
-
-        <Card>
-          <SectionHeader title="Deadlines due soon" count={overview.deadlinesDueSoon.length} />
-          <div className="grid gap-3">
-            {overview.deadlinesDueSoon.length === 0 ? <Empty text="Nothing urgent." /> : overview.deadlinesDueSoon.map((item) => (
-              <MiniRow key={`${item.type}-${item.id}`} href={item.href as Route} label={`${item.type}: ${item.title}`} value={item.overdue ? `${Math.abs(item.daysRemaining)}d overdue` : `${item.daysRemaining}d left`} danger={item.overdue} />
-            ))}
-          </div>
-        </Card>
-
-        <Card>
-          <SectionHeader title="Recent payments" count={overview.recentPayments.length} />
-          <div className="grid gap-3">
-            {overview.recentPayments.length === 0 ? <Empty text="No payments logged yet." /> : overview.recentPayments.map((payment) => (
-              <MiniRow key={payment.id} href="/dashboard/payments" label={`${payment.client.companyName} · ${payment.method}`} value={formatCurrency(payment.amountReceived)} />
-            ))}
-          </div>
-        </Card>
-      </div>
-
       <Card>
-        <SectionHeader title="Recent internal activity" count={overview.recentActivity.length} />
+        <SectionHeader title="Recent payments" count={overview.recentPayments.length} />
         <div className="grid gap-3">
-          {overview.recentActivity.length === 0 ? <Empty text="No activity yet." /> : overview.recentActivity.map((activity) => (
-            <div key={activity.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#fbfaf8] px-4 py-3 text-sm">
-              <div>
-                <p className="font-semibold text-slate-900">{activity.message}</p>
-                <p className="text-slate-500">{activity.entityType} · {activity.action}</p>
-              </div>
-              <span className="text-slate-500">{formatDate(activity.createdAt)}</span>
-            </div>
+          {overview.recentPayments.length === 0 ? <Empty text="No payments logged yet." /> : overview.recentPayments.map((payment) => (
+            <MiniRow key={payment.id} href="/dashboard/payments" label={`${payment.client.companyName} - ${payment.method}`} value={formatCurrency(payment.amountReceived)} />
           ))}
         </div>
       </Card>
@@ -185,10 +147,10 @@ function SectionHeader({ title, count }: { title: string; count: number }) {
 
 function MiniRow({ href, label, value, danger }: { href: Route | string; label: string; value: string; danger?: boolean }) {
   return (
-    <Link className="flex items-center justify-between gap-3 rounded-2xl bg-[#fbfaf8] px-4 py-3 text-sm transition hover:bg-white" href={href as Route}>
+    <a className="flex items-center justify-between gap-3 rounded-2xl bg-[#fbfaf8] px-4 py-3 text-sm transition hover:bg-white" href={href as string}>
       <span className="font-medium text-slate-700">{label}</span>
       <span className={danger ? "font-semibold text-rose-700" : "font-semibold text-slate-950"}>{value}</span>
-    </Link>
+    </a>
   );
 }
 

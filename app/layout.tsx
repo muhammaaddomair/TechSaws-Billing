@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "TechSaws Billing",
-  description: "Invoice generator for development services and client subscriptions."
+  description: "Invoice generator for development services and client billing."
 };
 
 export default function RootLayout({

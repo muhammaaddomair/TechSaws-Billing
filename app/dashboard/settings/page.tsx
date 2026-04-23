@@ -8,7 +8,7 @@ const settings = [
   ["Company settings", "TechSaws business profile, default contact details, and owner metadata."],
   ["Invoice settings", "Default invoice terms, tax/discount placeholders, and invoice numbering preferences."],
   ["User / role placeholder", "Owner, partner, and staff role support is modelled for role-aware rendering."],
-  ["Status / label config", "Centralized constants keep client, project, invoice, asset, and task states consistent."],
+  ["Status / label config", "Centralized constants keep client, project, invoice, and payment states consistent."],
   ["Default currency", "USD is the current default. Payments retain a currency field for future multi-currency support."],
   ["Business preferences", "Renewal alert thresholds, health score thresholds, and project risk thresholds are ready for tuning."]
 ];

@@ -3,10 +3,9 @@ import type { Route } from "next";
 import { notFound } from "next/navigation";
 import { DeleteButton } from "@/components/dashboard/delete-button";
 import { ClientForm } from "@/components/forms/client-form";
-import { SubscriptionForm } from "@/components/forms/subscription-form";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { deleteClient, deleteSubscription } from "@/lib/actions";
+import { deleteClient } from "@/lib/actions";
 import { getClientDetail } from "@/lib/data";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
@@ -15,11 +14,6 @@ export const dynamic = "force-dynamic";
 async function deleteCurrentClient(clientId: string) {
   "use server";
   return deleteClient(clientId);
-}
-
-async function deleteCurrentSubscription(subscriptionId: string, clientId: string) {
-  "use server";
-  return deleteSubscription(subscriptionId, clientId);
 }
 
 export default async function ClientDetailPage({
@@ -36,7 +30,7 @@ export default async function ClientDetailPage({
 
   return (
     <div className="grid gap-6">
-      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+      <div className="grid gap-6">
         <Card>
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
@@ -65,55 +59,9 @@ export default async function ClientDetailPage({
             submitLabel="Update client"
           />
         </Card>
-
-        <Card>
-          <div className="mb-5">
-            <h3 className="text-xl font-semibold text-ink">Add Subscription</h3>
-            <p className="mt-2 text-sm text-slate-600">
-              Subscription invoices will automatically pull these services and add the required 25% service tax.
-            </p>
-          </div>
-          <SubscriptionForm clientId={client.id} />
-        </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-        <Card>
-          <div className="mb-5 flex items-center justify-between gap-4">
-            <div>
-              <h3 className="text-xl font-semibold text-ink">Subscriptions</h3>
-              <p className="mt-2 text-sm text-slate-600">Recurring services billed on behalf of this client.</p>
-            </div>
-            <Badge>{client.subscriptions.length} linked</Badge>
-          </div>
-          <div className="grid gap-4">
-            {client.subscriptions.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 px-5 py-8 text-center text-sm text-slate-500">
-                No subscriptions added yet.
-              </div>
-            ) : (
-              client.subscriptions.map((subscription) => (
-                <div key={subscription.id} className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <h4 className="text-lg font-semibold text-slate-900">{subscription.serviceName}</h4>
-                      <p className="text-sm text-slate-600">
-                        {subscription.billingCycle === "YEARLY" ? "Yearly" : "Monthly"} billing
-                      </p>
-                    </div>
-                    <p className="text-lg font-semibold text-ink">{formatCurrency(subscription.monthlyCost)}</p>
-                  </div>
-                  <SubscriptionForm clientId={client.id} defaultValues={subscription} />
-                  <DeleteButton
-                    action={deleteCurrentSubscription.bind(null, subscription.id, client.id)}
-                    label="subscription"
-                  />
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
-
+      <div className="grid gap-6">
         <Card>
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>

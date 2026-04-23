@@ -36,10 +36,8 @@ npm run dev
 - Use the pooled Neon connection string for `DATABASE_URL`.
 - Use the direct Neon connection string for `DIRECT_URL`.
 - Prisma migrations should use the direct URL.
+- In Vercel, set the same real Neon values in Project Settings > Environment Variables for Production, Preview, and Development. Do not deploy placeholder hosts such as `EP-POOLER-HOST`, `YOUR-NEON-POOLER-HOST`, or `DB_NAME`.
 
-- Development and subscription invoices are stored separately via `InvoiceType`.
-- Subscription invoices generate items dynamically from client subscriptions.
-- Subscription invoices automatically add a 25% service tax.
 - Invoice generation is transaction-safe and locks totals by moving drafts to `GENERATED`.
 - Draft development invoices use manually entered line items.
 

@@ -24,3 +24,27 @@ export function TechSawsLogo({
     </div>
   );
 }
+
+export function TechSawsBrand({
+  logoSize = 72,
+  priority = false,
+  inverse = false
+}: {
+  logoSize?: number;
+  priority?: boolean;
+  inverse?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-4">
+      <TechSawsLogo priority={priority} size={logoSize} />
+      <div className="min-w-0">
+        <p className={inverse ? "text-xl font-semibold tracking-tight text-white" : "text-xl font-semibold tracking-tight text-slate-950"}>
+          TechSaws Billing
+        </p>
+        <p className={inverse ? "mt-1 text-xs font-medium uppercase tracking-[0.2em] text-white/55" : "mt-1 text-xs font-medium uppercase tracking-[0.2em] text-slate-500"}>
+          Invoice workspace
+        </p>
+      </div>
+    </div>
+  );
+}

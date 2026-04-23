@@ -16,13 +16,4 @@ export const clientSchema = z.object({
   tagsText: z.string().trim().optional()
 });
 
-export const subscriptionSchema = z.object({
-  id: z.string().cuid().optional(),
-  clientId: z.string().cuid(),
-  serviceName: z.string().trim().min(2, "Service name is required."),
-  monthlyCost: z.coerce.number().positive("Monthly cost must be greater than zero."),
-  billingCycle: z.enum(["MONTHLY", "YEARLY"])
-});
-
 export type ClientInput = z.infer<typeof clientSchema>;
-export type SubscriptionInput = z.infer<typeof subscriptionSchema>;

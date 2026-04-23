@@ -1,6 +1,4 @@
 import {
-  type AssetStatus,
-  type AssetType,
   type BillingCycle,
   type ClientStatus,
   type ClientType,
@@ -23,9 +21,7 @@ export type ClientListItem = {
   status: ClientStatus;
   createdAt: Date;
   invoiceCount: number;
-  activeSubscriptions: number;
   activeProjects: number;
-  monthlyRecurringRevenue: number;
   totalLifetimeRevenue: number;
   totalCosts: number;
   profit: number;
@@ -33,15 +29,6 @@ export type ClientListItem = {
   lastPaymentDate: Date | null;
   healthScore: number;
   healthBand: "Healthy" | "Watch" | "Risk";
-};
-
-export type SubscriptionRecord = {
-  id: string;
-  clientId: string;
-  serviceName: string;
-  monthlyCost: number;
-  billingCycle: "MONTHLY" | "YEARLY";
-  createdAt: Date;
 };
 
 export type InvoiceItemRecord = {
@@ -93,7 +80,6 @@ export type ClientDetail = {
   startDate: Date | null;
   tags: string[];
   createdAt: Date;
-  subscriptions: SubscriptionRecord[];
   invoices: InvoiceListItem[];
   projects: Array<{
     id: string;
@@ -113,24 +99,12 @@ export type ClientDetail = {
     referenceNumber: string | null;
     allocatedAmount: number;
   }>;
-  assets: Array<{
-    id: string;
-    name: string;
-    type: AssetType;
-    provider: string | null;
-    renewalDate: Date | null;
-    internalCost: number;
-    clientCharge: number;
-    status: AssetStatus;
-    margin: number;
-  }>;
   metrics: {
     totalRevenue: number;
     totalCosts: number;
     profit: number;
     marginPercent: number;
     outstandingBalance: number;
-    monthlyRecurringRevenue: number;
     healthScore: number;
     healthBand: "Healthy" | "Watch" | "Risk";
   };
@@ -180,41 +154,17 @@ export type DashboardOverview = {
   invoiceCount: number;
   draftCount: number;
   paidCount: number;
-  subscriptionCount: number;
   generatedRevenue: number;
   activeProjects: number;
   monthlyRevenue: number;
-  monthlyRecurringRevenue: number;
   outstandingInvoices: number;
   overdueInvoicesCount: number;
   monthlyCosts: number;
   estimatedMonthlyProfit: number;
-  upcomingRenewalsCount: number;
   delayedProjectsCount: number;
   mostProfitableClients: ClientListItem[];
   lowMarginClients: ClientListItem[];
   clientsWithOverduePayments: ClientListItem[];
-  upcomingRenewals: Array<{
-    id: string;
-    name: string;
-    renewalDate: Date | null;
-    client: { companyName: string };
-    monthlyContribution: number;
-  }>;
-  deadlinesDueSoon: Array<{
-    id: string;
-    type: string;
-    title: string;
-    clientName: string;
-    projectName: string | null;
-    date: Date;
-    status: string;
-    href: string;
-    daysRemaining: number;
-    overdue: boolean;
-    dueSoon: boolean;
-    severity: string;
-  }>;
   recentPayments: Array<{
     id: string;
     paymentDate: Date;
@@ -223,13 +173,6 @@ export type DashboardOverview = {
     unallocatedAmount: number;
     client: { companyName: string };
     method: PaymentMethod;
-  }>;
-  recentActivity: Array<{
-    id: string;
-    message: string;
-    entityType: string;
-    action: string;
-    createdAt: Date;
   }>;
   paymentGraph: {
     expectedFromInvoices: number;

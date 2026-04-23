@@ -5,16 +5,17 @@ import { ZodError } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { clearSession, setSession } from "@/lib/auth";
-import { calculateDevelopmentInvoice, calculateSubscriptionInvoice } from "@/lib/calculations";
+import { calculateDevelopmentInvoice } from "@/lib/calculations";
 import { invoiceBalance } from "@/lib/business";
 import { assertDatabaseUrl } from "@/lib/env";
+import { generateInvoicePdf } from "@/lib/invoice-pdf";
 import { verifyPassword } from "@/lib/passwords";
 import { prisma } from "@/lib/prisma";
-import { clientSchema, subscriptionSchema } from "@/validators/client";
+import { sendMail } from "@/lib/smtp-mailer";
+import { clientSchema } from "@/validators/client";
 import { loginSchema } from "@/validators/auth";
 import { generateInvoiceSchema, invoiceDraftSchema, manualInvoiceSchema } from "@/validators/invoice";
 import {
-  assetSchema,
   costRecordSchema,
   milestoneSchema,
   noteSchema,
@@ -22,9 +23,7 @@ import {
   paymentSchema,
   paymentStatusSchema,
   projectSchema,
-  renewalSchema,
-  revenueRecordSchema,
-  taskSchema
+  revenueRecordSchema
 } from "@/validators/operations";
 
 function toDecimal(value: number) {
@@ -173,70 +172,6 @@ export async function deleteClient(clientId: string): Promise<ActionResult> {
     return {
       success: true,
       message: "Client archived."
-    };
-  } catch (error) {
-    return {
-      success: false,
-      message: validationErrorMessage(error)
-    };
-  }
-}
-
-export async function saveSubscription(input: unknown): Promise<ActionResult> {
-  try {
-    assertDatabaseUrl();
-    const data = subscriptionSchema.parse(input);
-
-    if (data.id) {
-      await prisma.subscription.update({
-        where: { id: data.id },
-        data: {
-          serviceName: data.serviceName,
-          monthlyCost: toDecimal(data.monthlyCost),
-          billingCycle: data.billingCycle
-        }
-      });
-    } else {
-      await prisma.subscription.create({
-        data: {
-          clientId: data.clientId,
-          serviceName: data.serviceName,
-          monthlyCost: toDecimal(data.monthlyCost),
-          billingCycle: data.billingCycle
-        }
-      });
-    }
-
-    revalidatePath(`/dashboard/clients/${data.clientId}`);
-    revalidatePath("/dashboard/invoices");
-
-    return {
-      success: true,
-      message: "Subscription saved successfully."
-    };
-  } catch (error) {
-    return {
-      success: false,
-      message: validationErrorMessage(error)
-    };
-  }
-}
-
-export async function deleteSubscription(subscriptionId: string, clientId: string): Promise<ActionResult> {
-  try {
-    assertDatabaseUrl();
-    await prisma.subscription.delete({
-      where: {
-        id: subscriptionId
-      }
-    });
-
-    revalidatePath(`/dashboard/clients/${clientId}`);
-    revalidatePath("/dashboard/invoices");
-
-    return {
-      success: true,
-      message: "Subscription removed."
     };
   } catch (error) {
     return {
@@ -399,23 +334,24 @@ export async function saveManualInvoice(input: unknown): Promise<ActionResult> {
   try {
     assertDatabaseUrl();
     const data = manualInvoiceSchema.parse(input);
-    const serviceTax = data.chargeType === "SUBSCRIPTION" && data.billingMode === "MONTHLY" ? data.totalProjectCost * 0.2 : 0;
-    const finalAmount = data.totalProjectCost + serviceTax;
-    const advanceAmount =
-      data.advanceAmount !== undefined && !Number.isNaN(data.advanceAmount)
-        ? data.advanceAmount
-        : (data.totalProjectCost * (data.advancePercent ?? 0)) / 100;
-    const advancePercent =
-      data.advancePercent !== undefined && !Number.isNaN(data.advancePercent)
-        ? data.advancePercent
-        : data.totalProjectCost > 0
-          ? (advanceAmount / data.totalProjectCost) * 100
-          : 0;
-    const paidAmount = Math.min(data.paidAmount, finalAmount);
-    const balance = invoiceBalance(finalAmount, paidAmount);
-    const status = balance <= 0 ? "PAID" : paidAmount > 0 ? "PARTIALLY_PAID" : "SENT";
-    const invoiceType = data.chargeType === "SUBSCRIPTION" ? "SUBSCRIPTION" : data.chargeType === "MAINTENANCE" ? "MAINTENANCE" : "DEVELOPMENT";
+    const normalizedItems = data.items.map((item) => {
+      const amount = item.amount > 0 ? item.amount : item.quantity * item.unitPrice;
+      return {
+        ...item,
+        amount: Number(amount.toFixed(2))
+      };
+    });
+    const subtotal = Number(normalizedItems.reduce((sum, item) => sum + item.amount, 0).toFixed(2));
+    const taxAmount = subtotal * (data.taxPercent / 100);
+    const finalAmount = Math.max(0, Number((subtotal + taxAmount - data.discountAmount).toFixed(2)));
     const clientEmail = data.email?.trim() || `invoice-${Date.now()}-${Math.random().toString(36).slice(2)}@internal.local`;
+    const pdfMeta = JSON.stringify({
+      bankName: data.bankName || "",
+      accountName: data.accountName || "",
+      accountNumber: data.accountNumber || "",
+      iban: data.iban || "",
+      taxPercent: data.taxPercent
+    });
 
     const invoice = await prisma.$transaction(async (tx) => {
       const client = await tx.client.upsert({
@@ -430,52 +366,56 @@ export async function saveManualInvoice(input: unknown): Promise<ActionResult> {
           name: data.clientName,
           email: clientEmail,
           companyName: data.companyName,
-          type: data.chargeType === "SUBSCRIPTION" ? "SAAS" : "SERVICE"
+          type: "SERVICE"
         }
       });
 
       const savedInvoice = data.id
-        ? await tx.invoice.update({
-            where: { id: data.id },
-            data: {
-              clientId: client.id,
-              type: invoiceType,
-              totalAmount: toDecimal(data.totalProjectCost),
-              taxAmount: toDecimal(serviceTax),
-              discountAmount: toDecimal(0),
-              finalAmount: toDecimal(finalAmount),
-              amountPaid: toDecimal(paidAmount),
-              balanceAmount: toDecimal(balance),
-              projectCost: toDecimal(data.totalProjectCost),
-              advancePercent: toDecimal(advancePercent),
-              advanceAmount: toDecimal(advanceAmount),
-              timeline: null,
-              issueDate: data.issueDate ?? new Date(),
-              dueDate: data.dueDate,
-              notes: data.notes || null,
-              status
-            }
-          })
-        : await tx.invoice.create({
-            data: {
-              clientId: client.id,
-              type: invoiceType,
-              totalAmount: toDecimal(data.totalProjectCost),
-              taxAmount: toDecimal(serviceTax),
-              discountAmount: toDecimal(0),
-              finalAmount: toDecimal(finalAmount),
-              amountPaid: toDecimal(paidAmount),
-              balanceAmount: toDecimal(balance),
-              projectCost: toDecimal(data.totalProjectCost),
-              advancePercent: toDecimal(advancePercent),
-              advanceAmount: toDecimal(advanceAmount),
-              timeline: null,
-              issueDate: data.issueDate ?? new Date(),
-              dueDate: data.dueDate,
-              notes: data.notes || null,
-              status
-            }
-          });
+          ? await tx.invoice.update({
+              where: { id: data.id },
+              data: {
+                invoiceNumber: data.invoiceNumber,
+                clientId: client.id,
+                type: "DEVELOPMENT",
+                totalAmount: toDecimal(subtotal),
+                taxAmount: toDecimal(taxAmount),
+                discountAmount: toDecimal(data.discountAmount),
+                finalAmount: toDecimal(finalAmount),
+                amountPaid: toDecimal(0),
+                balanceAmount: toDecimal(finalAmount),
+                projectCost: toDecimal(subtotal),
+                advancePercent: null,
+                advanceAmount: toDecimal(0),
+                timeline: null,
+                issueDate: data.issueDate ?? new Date(),
+                dueDate: data.dueDate,
+                notes: data.notes || null,
+                internalComments: pdfMeta,
+                status: "SENT"
+              }
+            })
+          : await tx.invoice.create({
+              data: {
+                invoiceNumber: data.invoiceNumber,
+                clientId: client.id,
+                type: "DEVELOPMENT",
+                totalAmount: toDecimal(subtotal),
+                taxAmount: toDecimal(taxAmount),
+                discountAmount: toDecimal(data.discountAmount),
+                finalAmount: toDecimal(finalAmount),
+                amountPaid: toDecimal(0),
+                balanceAmount: toDecimal(finalAmount),
+                projectCost: toDecimal(subtotal),
+                advancePercent: null,
+                advanceAmount: toDecimal(0),
+                timeline: null,
+                issueDate: data.issueDate ?? new Date(),
+                dueDate: data.dueDate,
+                notes: data.notes || null,
+                internalComments: pdfMeta,
+                status: "SENT"
+              }
+            });
 
       await tx.invoiceItem.deleteMany({
         where: {
@@ -483,34 +423,18 @@ export async function saveManualInvoice(input: unknown): Promise<ActionResult> {
         }
       });
 
-      await tx.invoiceItem.createMany({
-        data: [
-          {
+        await tx.invoiceItem.createMany({
+          data: normalizedItems.map((item) => ({
             invoiceId: savedInvoice.id,
-            title: data.projectType || (data.chargeType === "SUBSCRIPTION" ? "Subscription charges" : data.chargeType === "MAINTENANCE" ? "Support charges" : "Software project"),
-            description: data.billingMode === "MONTHLY" ? "Monthly subscription" : "One-time order",
-            quantity: 1,
-            unitPrice: toDecimal(data.totalProjectCost),
-            total: toDecimal(data.totalProjectCost),
-            category: data.chargeType === "SUBSCRIPTION" ? "SUBSCRIPTION" : data.chargeType === "MAINTENANCE" ? "MAINTENANCE_SUPPORT" : "PROJECT_SERVICE",
-            recurring: data.billingMode === "MONTHLY"
-          },
-          ...(serviceTax > 0
-            ? [
-                {
-                  invoiceId: savedInvoice.id,
-                  title: "Service tax",
-                  description: "20% monthly subscription service tax",
-                  quantity: 1,
-                  unitPrice: toDecimal(serviceTax),
-                  total: toDecimal(serviceTax),
-                  category: "SUBSCRIPTION" as const,
-                  recurring: true
-                }
-              ]
-            : [])
-        ]
-      });
+            title: item.description,
+            description: null,
+            quantity: Math.max(1, Math.round(item.quantity)),
+            unitPrice: toDecimal(item.unitPrice),
+            total: toDecimal(item.amount),
+            category: "PROJECT_SERVICE",
+            recurring: false
+          }))
+        });
 
       return savedInvoice;
     });
@@ -547,25 +471,38 @@ export async function sendInvoiceEmail(invoiceId: string): Promise<ActionResult>
       throw new Error("Client email is missing.");
     }
 
-    const smtpReady = process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS && process.env.SMTP_FROM;
-    if (!smtpReady) {
-      return {
-        success: false,
-        message: "Email is ready in the UI, but SMTP_HOST, SMTP_USER, SMTP_PASS, and SMTP_FROM must be added before direct sending can work."
-      };
-    }
+    const pdf = await generateInvoicePdf(invoice.id);
+
+    await sendMail({
+      to: invoice.client.email,
+      subject: `Invoice ${invoice.invoiceNumber}`,
+      text: "Kindly see attached invoice.",
+      attachments: [
+        {
+          filename: pdf.filename,
+          contentType: "application/pdf",
+          content: pdf.bytes
+        }
+      ]
+    });
+
+    await prisma.invoice.update({
+      where: { id: invoice.id },
+      data: { status: invoice.status === "PAID" || invoice.status === "PARTIALLY_PAID" ? invoice.status : "SENT" }
+    });
 
     await logActivity({
       entityType: "INVOICE",
       entityId: invoice.id,
       action: "UPDATED",
-      message: `Invoice email prepared for ${invoice.client.email}.`
+      message: `Invoice email sent to ${invoice.client.email}.`
     });
 
-    return {
-      success: false,
-      message: "SMTP settings are present, but no mail transport dependency is installed yet."
-    };
+    revalidatePath("/dashboard/payments");
+    revalidatePath("/dashboard/invoices");
+    revalidatePath(`/dashboard/invoices/${invoiceId}`);
+
+    return { success: true, message: `Invoice emailed to ${invoice.client.email}.` };
   } catch (error) {
     return { success: false, message: validationErrorMessage(error) };
   }
@@ -583,11 +520,7 @@ export async function generateInvoice(input: unknown): Promise<ActionResult> {
         },
         include: {
           items: true,
-          client: {
-            include: {
-              subscriptions: true
-            }
-          }
+          client: true
         }
       });
 
@@ -599,51 +532,11 @@ export async function generateInvoice(input: unknown): Promise<ActionResult> {
         throw new Error("Only draft invoices can be generated.");
       }
 
-      if (invoice.type === "DEVELOPMENT") {
-        if (invoice.items.length === 0) {
-          throw new Error("Development invoices require at least one item.");
-        }
-
-        const summary = calculateDevelopmentInvoice(invoice.items);
-
-        await tx.invoice.update({
-          where: {
-            id: invoiceId
-          },
-          data: {
-            totalAmount: toDecimal(summary.totalAmount),
-            taxAmount: toDecimal(summary.taxAmount),
-            finalAmount: toDecimal(summary.finalAmount),
-            balanceAmount: toDecimal(summary.finalAmount),
-            status: "GENERATED"
-          }
-        });
-
-        return;
+      if (invoice.items.length === 0) {
+        throw new Error("Invoices require at least one item.");
       }
 
-      const summary = calculateSubscriptionInvoice(invoice.client.subscriptions);
-
-      if (summary.items.length === 0) {
-        throw new Error("This client has no subscriptions to bill.");
-      }
-
-      await tx.invoiceItem.deleteMany({
-        where: {
-          invoiceId
-        }
-      });
-
-      await tx.invoiceItem.createMany({
-        data: summary.items.map((item) => ({
-          invoiceId,
-          title: item.title,
-          description: item.description,
-          quantity: item.quantity,
-          unitPrice: toDecimal(item.unitPrice),
-          total: toDecimal(item.total)
-        }))
-      });
+      const summary = calculateDevelopmentInvoice(invoice.items);
 
       await tx.invoice.update({
         where: {
@@ -750,120 +643,7 @@ export async function saveMilestone(input: unknown): Promise<ActionResult> {
       message: `Milestone ${milestone.title} ${data.id ? "updated" : "created"}.`
     });
     revalidatePath(`/dashboard/projects/${milestone.projectId}`);
-    revalidatePath("/dashboard/deadlines");
     return { success: true, message: "Milestone saved successfully." };
-  } catch (error) {
-    return { success: false, message: validationErrorMessage(error) };
-  }
-}
-
-export async function saveAsset(input: unknown): Promise<ActionResult> {
-  try {
-    assertDatabaseUrl();
-    const data = assetSchema.parse(input);
-    const payload = {
-      clientId: data.clientId,
-      name: data.name,
-      type: data.type,
-      provider: data.provider || null,
-      providerAccountReference: data.providerAccountReference || null,
-      purchaseDate: data.purchaseDate,
-      renewalDate: data.renewalDate,
-      billingFrequency: data.billingFrequency,
-      internalCost: toDecimal(data.internalCost),
-      clientCharge: toDecimal(data.clientCharge),
-      status: data.status,
-      autoRenewal: data.autoRenewal,
-      alertDays: data.alertDays,
-      notes: data.notes || null
-    };
-    const asset = data.id
-      ? await prisma.asset.update({ where: { id: data.id }, data: payload })
-      : await prisma.asset.create({ data: payload });
-
-    await logActivity({
-      entityType: "ASSET",
-      entityId: asset.id,
-      action: data.id ? "UPDATED" : "CREATED",
-      message: `Asset ${asset.name} ${data.id ? "updated" : "created"}.`
-    });
-    revalidatePath("/dashboard/assets");
-    revalidatePath(`/dashboard/assets/${asset.id}`);
-    revalidatePath(`/dashboard/clients/${asset.clientId}`);
-    revalidatePath("/dashboard");
-    return { success: true, message: "Asset saved successfully." };
-  } catch (error) {
-    return { success: false, message: validationErrorMessage(error) };
-  }
-}
-
-export async function renewAsset(input: unknown): Promise<ActionResult> {
-  try {
-    assertDatabaseUrl();
-    const data = renewalSchema.parse(input);
-    await prisma.$transaction(async (tx) => {
-      await tx.assetRenewal.create({
-        data: {
-          assetId: data.assetId,
-          dateRenewed: data.dateRenewed,
-          newRenewalDate: data.newRenewalDate,
-          cost: toDecimal(data.cost),
-          clientCharge: toDecimal(data.clientCharge),
-          notes: data.notes || null
-        }
-      });
-      await tx.asset.update({
-        where: { id: data.assetId },
-        data: {
-          renewalDate: data.newRenewalDate,
-          internalCost: toDecimal(data.cost),
-          clientCharge: toDecimal(data.clientCharge),
-          status: "ACTIVE"
-        }
-      });
-    });
-    await logActivity({
-      entityType: "ASSET",
-      entityId: data.assetId,
-      action: "RENEWED",
-      message: "Asset renewed."
-    });
-    revalidatePath("/dashboard/assets");
-    revalidatePath(`/dashboard/assets/${data.assetId}`);
-    revalidatePath("/dashboard/deadlines");
-    return { success: true, message: "Asset renewed successfully." };
-  } catch (error) {
-    return { success: false, message: validationErrorMessage(error) };
-  }
-}
-
-export async function saveTask(input: unknown): Promise<ActionResult> {
-  try {
-    assertDatabaseUrl();
-    const data = taskSchema.parse(input);
-    const payload = {
-      title: data.title,
-      description: data.description || null,
-      status: data.status,
-      priority: data.priority,
-      dueDate: data.dueDate,
-      clientId: data.clientId || null,
-      projectId: data.projectId || null
-    };
-    const task = data.id
-      ? await prisma.task.update({ where: { id: data.id }, data: payload })
-      : await prisma.task.create({ data: payload });
-
-    await logActivity({
-      entityType: "TASK",
-      entityId: task.id,
-      action: data.status === "DONE" ? "COMPLETED" : data.id ? "UPDATED" : "CREATED",
-      message: `Task ${task.title} ${data.id ? "updated" : "created"}.`
-    });
-    revalidatePath("/dashboard/tasks");
-    revalidatePath("/dashboard/deadlines");
-    revalidatePath("/dashboard");
-    return { success: true, message: "Task saved successfully." };
   } catch (error) {
     return { success: false, message: validationErrorMessage(error) };
   }
@@ -958,7 +738,7 @@ export async function savePaymentRequest(input: unknown): Promise<ActionResult> 
     assertDatabaseUrl();
     const data = paymentRequestSchema.parse(input);
     const baseAmount = data.amount;
-    const taxAmount = data.paymentType === "MONTHLY_SUBSCRIPTION" ? baseAmount * 0.2 : 0;
+    const taxAmount = 0;
     const finalAmount = baseAmount + taxAmount;
     const advanceAmount =
       data.advanceAmount !== undefined && !Number.isNaN(data.advanceAmount)
@@ -988,18 +768,8 @@ export async function savePaymentRequest(input: unknown): Promise<ActionResult> 
             ? await tx.project.findUnique({ where: { id: data.projectId } })
             : null;
 
-      const invoiceType =
-        data.paymentType === "MONTHLY_SUBSCRIPTION"
-          ? "SUBSCRIPTION"
-          : data.paymentType === "SUPPORT"
-            ? "MAINTENANCE"
-            : "DEVELOPMENT";
-      const title =
-        data.paymentType === "MONTHLY_SUBSCRIPTION"
-          ? "Monthly subscription"
-          : data.paymentType === "SUPPORT"
-            ? "Support charges"
-            : project?.name ?? "Product payment";
+      const invoiceType = data.paymentType === "SUPPORT" ? "MAINTENANCE" : "DEVELOPMENT";
+      const title = data.paymentType === "SUPPORT" ? "Support charges" : project?.name ?? "Product payment";
       const createdInvoice = await tx.invoice.create({
         data: {
           clientId: data.clientId,
@@ -1029,28 +799,9 @@ export async function savePaymentRequest(input: unknown): Promise<ActionResult> 
             quantity: 1,
             unitPrice: toDecimal(baseAmount),
             total: toDecimal(baseAmount),
-            category:
-              data.paymentType === "MONTHLY_SUBSCRIPTION"
-                ? "SUBSCRIPTION"
-                : data.paymentType === "SUPPORT"
-                  ? "MAINTENANCE_SUPPORT"
-                  : "PROJECT_SERVICE",
-            recurring: data.paymentType === "MONTHLY_SUBSCRIPTION"
-          },
-          ...(taxAmount > 0
-            ? [
-                {
-                  invoiceId: createdInvoice.id,
-                  title: "Service tax",
-                  description: "20% monthly subscription service tax",
-                  quantity: 1,
-                  unitPrice: toDecimal(taxAmount),
-                  total: toDecimal(taxAmount),
-                  category: "SUBSCRIPTION" as const,
-                  recurring: true
-                }
-              ]
-            : [])
+            category: data.paymentType === "SUPPORT" ? "MAINTENANCE_SUPPORT" : "PROJECT_SERVICE",
+            recurring: false
+          }
         ]
       });
 
@@ -1253,7 +1004,6 @@ export async function addInternalNote(input: unknown): Promise<ActionResult> {
       action: "NOTE_ADDED",
       message: `Note added to ${data.entityType.toLowerCase()}.`
     });
-    revalidatePath("/dashboard/activity");
     return { success: true, message: "Note added." };
   } catch (error) {
     return { success: false, message: validationErrorMessage(error) };

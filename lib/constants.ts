@@ -1,6 +1,6 @@
 export const clientTypes = [
   ["SERVICE", "Service client"],
-  ["SAAS", "SaaS/subscription client"],
+  ["SAAS", "SaaS client"],
   ["INFRA_ONLY", "Infra-only client"],
   ["HYBRID", "Hybrid client"],
   ["ONE_TIME_PROJECT", "One-time project client"],
@@ -54,17 +54,6 @@ export const paymentMethods = [
   ["OTHER", "Other"]
 ] as const;
 
-export const assetTypes = [
-  ["DOMAIN", "Domain"],
-  ["VPS_SERVER", "VPS/server"],
-  ["CLOUD_HOSTING", "Cloud hosting"],
-  ["MAILBOX_EMAIL", "Mailbox/email"],
-  ["SAAS_SUBSCRIPTION", "SaaS subscription"],
-  ["SSL", "SSL"],
-  ["MAINTENANCE_SUPPORT", "Maintenance/support plan"],
-  ["OTHER_RECURRING_SERVICE", "Other recurring service"]
-] as const;
-
 export const billingCycles = [
   ["MONTHLY", "Monthly"],
   ["YEARLY", "Yearly"],
@@ -75,7 +64,7 @@ export const billingCycles = [
 
 export const revenueCategories = [
   ["PROJECT_SERVICE", "Project/service revenue"],
-  ["SUBSCRIPTION", "Subscription revenue"],
+  ["SUBSCRIPTION", "Recurring revenue"],
   ["HOSTING_SERVER", "Hosting/server revenue"],
   ["DOMAIN", "Domain revenue"],
   ["MAILBOX_EMAIL", "Mailbox/email revenue"],
@@ -92,14 +81,6 @@ export const costCategories = [
   ["CONTRACTOR_INTERNAL", "Contractor/internal delivery"],
   ["PAYMENT_FEES", "Payment/transaction fees"],
   ["OTHER_OPERATIONAL", "Other operational cost"]
-] as const;
-
-export const taskStatuses = [
-  ["TODO", "Todo"],
-  ["IN_PROGRESS", "In progress"],
-  ["BLOCKED", "Blocked"],
-  ["DONE", "Done"],
-  ["CANCELLED", "Cancelled"]
 ] as const;
 
 export function labelFor(value: string | null | undefined, options: readonly (readonly [string, string])[]) {

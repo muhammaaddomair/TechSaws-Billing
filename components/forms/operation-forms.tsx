@@ -6,16 +6,12 @@ import { useRouter } from "next/navigation";
 import { useFieldArray, useForm } from "react-hook-form";
 import {
   addInternalNote,
-  renewAsset,
-  saveAsset,
   saveCostRecord,
   saveMilestone,
   savePayment,
   saveRevenueRecord,
-  saveTask,
 } from "@/lib/actions";
 import {
-  assetSchema,
   costRecordSchema,
   milestoneSchema,
   noteSchema,
@@ -23,29 +19,22 @@ import {
   paymentSchema,
   paymentStatusSchema,
   projectSchema,
-  renewalSchema,
   revenueRecordSchema,
-  taskSchema,
-  type AssetInput,
   type CostRecordInput,
   type MilestoneInput,
   type PaymentInput,
   type PaymentRequestInput,
   type PaymentStatusInput,
   type ProjectInput,
-  type RenewalInput,
-  type RevenueRecordInput,
-  type TaskInput
+  type RevenueRecordInput
 } from "@/validators/operations";
 import {
-  assetTypes,
   billingCycles,
   costCategories,
   paymentMethods,
   priorities,
   projectStatuses,
-  revenueCategories,
-  taskStatuses
+  revenueCategories
 } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -57,7 +46,6 @@ import { Textarea } from "@/components/ui/textarea";
 type ClientOption = { id: string; name: string; companyName: string };
 type ProjectOption = { id: string; name: string; clientId: string };
 type InvoiceOption = { id: string; invoiceNumber: string; clientId: string; balanceAmount: number; companyName: string };
-type AssetOption = { id: string; name: string; clientId: string };
 type PaymentStatusRecord = {
   id: string;
   finalAmount: number;
@@ -125,7 +113,6 @@ export function ProjectForm({
             <option value="CLIENT_SERVICE">Client service</option>
             <option value="SOFTWARE_PRODUCT">Software product</option>
             <option value="INTERNAL_TOOL">Internal tool</option>
-            <option value="SUBSCRIPTION_SETUP">Subscription setup</option>
             <option value="INFRASTRUCTURE">Infrastructure</option>
             <option value="SUPPORT">Support</option>
             <option value="OTHER">Other</option>
@@ -285,7 +272,6 @@ export function PaymentRequestForm({ clients, projects, onSuccess }: { clients: 
   const advancePercent = Number(form.watch("advancePercent")) || 0;
   const advanceAmount = Number(form.watch("advanceAmount")) || 0;
   const createProject = Boolean(form.watch("createProject"));
-  const serviceTax = paymentType === "MONTHLY_SUBSCRIPTION" ? amount * 0.2 : 0;
   const filteredProjects = projects.filter((project) => project.clientId === clientId);
 
   const updateAdvanceAmount = (value: string) => {
@@ -335,7 +321,6 @@ export function PaymentRequestForm({ clients, projects, onSuccess }: { clients: 
           <Select {...form.register("paymentType")}>
             <option value="PRODUCT">Product</option>
             <option value="SUPPORT">Support charges</option>
-            <option value="MONTHLY_SUBSCRIPTION">Monthly subscription</option>
           </Select>
         </Field>
         <Field error={form.formState.errors.amount?.message} label={paymentType === "PRODUCT" ? "Product amount" : "Amount to be paid"}>
@@ -365,7 +350,6 @@ export function PaymentRequestForm({ clients, projects, onSuccess }: { clients: 
                   <option value="SOFTWARE_PRODUCT">Software product</option>
                   <option value="CLIENT_SERVICE">Client service</option>
                   <option value="INTERNAL_TOOL">Internal tool</option>
-                  <option value="SUBSCRIPTION_SETUP">Subscription setup</option>
                   <option value="INFRASTRUCTURE">Infrastructure</option>
                   <option value="SUPPORT">Support</option>
                   <option value="OTHER">Other</option>
@@ -391,10 +375,9 @@ export function PaymentRequestForm({ clients, projects, onSuccess }: { clients: 
         </div>
       ) : null}
 
-      <div className="grid gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700 sm:grid-cols-3">
+      <div className="grid gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700 sm:grid-cols-2">
         <span>Base: {formatCurrency(amount)}</span>
-        <span>Service tax: {formatCurrency(serviceTax)}</span>
-        <span className="font-semibold text-slate-950">Total: {formatCurrency(amount + serviceTax)}</span>
+        <span className="font-semibold text-slate-950">Total: {formatCurrency(amount)}</span>
       </div>
       <Field label="Notes"><Textarea {...form.register("notes")} /></Field>
       <ServerMessage message={message} />
@@ -516,116 +499,7 @@ export function PaymentStatusControl({ invoice }: { invoice: PaymentStatusRecord
   );
 }
 
-export function AssetForm({ clients }: { clients: ClientOption[] }) {
-  const router = useRouter();
-  const [message, setMessage] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const form = useForm<AssetInput>({
-    resolver: zodResolver(assetSchema),
-    defaultValues: {
-      clientId: clients[0]?.id ?? "",
-      name: "",
-      type: "DOMAIN",
-      billingFrequency: "YEARLY",
-      internalCost: 0,
-      clientCharge: 0,
-      status: "ACTIVE",
-      autoRenewal: false,
-      alertDays: 30
-    }
-  });
-
-  return (
-    <form className="grid gap-4" onSubmit={form.handleSubmit((values) => startTransition(async () => {
-      const result = await saveAsset(values);
-      setMessage(result.message);
-      if (result.success) {
-        router.refresh();
-      }
-    }))}>
-      <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Client"><Select {...form.register("clientId")}>{clients.map((client) => <option key={client.id} value={client.id}>{client.name} - {client.companyName}</option>)}</Select></Field>
-        <Field error={form.formState.errors.name?.message} label="Asset name"><Input placeholder="example.com" {...form.register("name")} /></Field>
-        <Field label="Type"><Select {...form.register("type")}>{optionList(assetTypes)}</Select></Field>
-        <Field label="Provider"><Input {...form.register("provider")} /></Field>
-        <Field label="Billing frequency"><Select {...form.register("billingFrequency")}>{optionList(billingCycles)}</Select></Field>
-        <Field label="Renewal date"><Input type="date" {...form.register("renewalDate")} /></Field>
-        <Field label="Internal cost"><Input min="0" step="0.01" type="number" {...form.register("internalCost")} /></Field>
-        <Field label="Client charge"><Input min="0" step="0.01" type="number" {...form.register("clientCharge")} /></Field>
-        <Field label="Status"><Select {...form.register("status")}><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option><option value="EXPIRING">Expiring</option><option value="EXPIRED">Expired</option><option value="CANCELLED">Cancelled</option></Select></Field>
-        <Field label="Alert days"><Input min="1" type="number" {...form.register("alertDays")} /></Field>
-      </div>
-      <Field label="Notes"><Textarea {...form.register("notes")} /></Field>
-      <ServerMessage message={message} />
-      <Button disabled={isPending} type="submit">{isPending ? "Saving..." : "Save asset"}</Button>
-    </form>
-  );
-}
-
-export function RenewalForm({ assetId }: { assetId: string }) {
-  const router = useRouter();
-  const [message, setMessage] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const form = useForm<RenewalInput>({
-    resolver: zodResolver(renewalSchema),
-    defaultValues: { assetId, dateRenewed: new Date(), newRenewalDate: new Date(), cost: 0, clientCharge: 0, notes: "" }
-  });
-
-  return (
-    <form className="grid gap-4" onSubmit={form.handleSubmit((values) => startTransition(async () => {
-      const result = await renewAsset(values);
-      setMessage(result.message);
-      if (result.success) {
-        router.refresh();
-      }
-    }))}>
-      <input type="hidden" {...form.register("assetId")} />
-      <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Date renewed"><Input type="date" defaultValue={todayValue()} {...form.register("dateRenewed")} /></Field>
-        <Field label="New renewal date"><Input type="date" {...form.register("newRenewalDate")} /></Field>
-        <Field label="Cost"><Input min="0" step="0.01" type="number" {...form.register("cost")} /></Field>
-        <Field label="Client charge"><Input min="0" step="0.01" type="number" {...form.register("clientCharge")} /></Field>
-      </div>
-      <Field label="Notes"><Textarea {...form.register("notes")} /></Field>
-      <ServerMessage message={message} />
-      <Button disabled={isPending} type="submit">{isPending ? "Saving..." : "Mark renewed"}</Button>
-    </form>
-  );
-}
-
-export function TaskForm({ clients, projects }: { clients: ClientOption[]; projects: ProjectOption[] }) {
-  const router = useRouter();
-  const [message, setMessage] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const form = useForm<TaskInput>({
-    resolver: zodResolver(taskSchema),
-    defaultValues: { title: "", description: "", status: "TODO", priority: "MEDIUM", clientId: "", projectId: "" }
-  });
-
-  return (
-    <form className="grid gap-4" onSubmit={form.handleSubmit((values) => startTransition(async () => {
-      const result = await saveTask(values);
-      setMessage(result.message);
-      if (result.success) {
-        router.refresh();
-      }
-    }))}>
-      <Field error={form.formState.errors.title?.message} label="Task title"><Input {...form.register("title")} /></Field>
-      <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Status"><Select {...form.register("status")}>{optionList(taskStatuses)}</Select></Field>
-        <Field label="Priority"><Select {...form.register("priority")}>{optionList(priorities)}</Select></Field>
-        <Field label="Due date"><Input type="date" {...form.register("dueDate")} /></Field>
-        <Field label="Related client"><Select {...form.register("clientId")}><option value="">Internal</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.companyName}</option>)}</Select></Field>
-        <Field label="Related project"><Select {...form.register("projectId")}><option value="">No project</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</Select></Field>
-      </div>
-      <Field label="Description"><Textarea {...form.register("description")} /></Field>
-      <ServerMessage message={message} />
-      <Button disabled={isPending} type="submit">{isPending ? "Saving..." : "Save task"}</Button>
-    </form>
-  );
-}
-
-export function FinanceRecordForms({ clients, projects, assets }: { clients: ClientOption[]; projects: ProjectOption[]; assets: AssetOption[] }) {
+export function FinanceRecordForms({ clients, projects }: { clients: ClientOption[]; projects: ProjectOption[] }) {
   const router = useRouter();
   const [revenueMessage, setRevenueMessage] = useState<string | null>(null);
   const [costMessage, setCostMessage] = useState<string | null>(null);
@@ -679,7 +553,6 @@ export function FinanceRecordForms({ clients, projects, assets }: { clients: Cli
           <Field label="Date"><Input defaultValue={todayValue()} type="date" {...cost.register("incurredDate")} /></Field>
           <Field label="Client"><Select {...cost.register("clientId")}><option value="">Internal/general</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.companyName}</option>)}</Select></Field>
           <Field label="Project"><Select {...cost.register("projectId")}><option value="">No project</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</Select></Field>
-          <Field label="Asset"><Select {...cost.register("assetId")}><option value="">No asset</option>{assets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</Select></Field>
         </div>
         <Field label="Vendor/provider"><Input {...cost.register("vendor")} /></Field>
         <Field label="Notes"><Textarea {...cost.register("notes")} /></Field>

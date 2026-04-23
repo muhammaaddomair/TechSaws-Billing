@@ -10,7 +10,11 @@ export default function DashboardError({
   reset: () => void;
 }) {
   const isDatabaseConfigError =
-    error.message.includes("DATABASE_URL") || error.message.includes("Environment variable not found");
+    error.message.includes("DATABASE_URL") ||
+    error.message.includes("DIRECT_URL") ||
+    error.message.includes("EP-POOLER-HOST") ||
+    error.message.includes("Environment variable not found") ||
+    error.message.includes("Can't reach database server");
 
   return (
     <main className="grid min-h-[60vh] place-items-center px-4 py-12">
@@ -21,18 +25,19 @@ export default function DashboardError({
         </h1>
         <p className="mt-3 text-sm text-slate-600">
           {isDatabaseConfigError
-            ? "Add your PostgreSQL connection string before opening the billing dashboard."
+            ? "Add your real PostgreSQL connection string before opening the billing dashboard."
             : error.message}
         </p>
 
         {isDatabaseConfigError ? (
           <div className="mt-6 rounded-2xl bg-slate-50 p-5 text-sm text-slate-700">
             <p className="font-semibold text-slate-900">Required setup</p>
-            <p className="mt-2">1. Create a `.env.local` file in the project root.</p>
+            <p className="mt-2">1. In Vercel, open Project Settings then Environment Variables.</p>
             <p className="mt-1">
-              2. Add `DATABASE_URL=&quot;postgresql://USER:PASSWORD@HOST:5432/DB_NAME?schema=public&quot;`
+              2. Set `DATABASE_URL` to the real pooled Neon URL, not `EP-POOLER-HOST`.
             </p>
-            <p className="mt-1">3. Run `npm run prisma:migrate` and then restart `npm run dev`.</p>
+            <p className="mt-1">3. Set `DIRECT_URL` to the real direct Neon URL, not `EP-DIRECT-HOST`.</p>
+            <p className="mt-1">4. Redeploy after saving the environment variables.</p>
           </div>
         ) : null}
 

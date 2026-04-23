@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { assertDatabaseUrl } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 
 const SESSION_COOKIE = "techsaws_session";
@@ -54,6 +55,8 @@ export async function clearSession() {
 }
 
 export async function getCurrentUser() {
+  assertDatabaseUrl();
+
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
 

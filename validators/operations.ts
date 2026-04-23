@@ -8,7 +8,7 @@ export const projectSchema = z.object({
   id: optionalCuid,
   clientId: z.string().cuid("Select a client."),
   name: z.string().trim().min(2, "Project name is required."),
-  type: z.enum(["SOFTWARE_PRODUCT", "CLIENT_SERVICE", "INTERNAL_TOOL", "SUBSCRIPTION_SETUP", "INFRASTRUCTURE", "SUPPORT", "OTHER"]),
+  type: z.enum(["SOFTWARE_PRODUCT", "CLIENT_SERVICE", "INTERNAL_TOOL", "INFRASTRUCTURE", "SUPPORT", "OTHER"]),
   status: z.enum(["NOT_STARTED", "PLANNING", "IN_PROGRESS", "ON_HOLD", "AWAITING_CLIENT", "UNDER_REVIEW", "DELIVERED", "COMPLETED", "CANCELLED"]),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
   description: z.string().trim().optional(),
@@ -69,8 +69,8 @@ export const paymentRequestSchema = z
     projectId: z.string().cuid().optional().or(z.literal("")),
     createProject: z.coerce.boolean().default(false),
     projectName: z.string().trim().optional(),
-    projectType: z.enum(["SOFTWARE_PRODUCT", "CLIENT_SERVICE", "INTERNAL_TOOL", "SUBSCRIPTION_SETUP", "INFRASTRUCTURE", "SUPPORT", "OTHER"]).default("CLIENT_SERVICE"),
-    paymentType: z.enum(["PRODUCT", "SUPPORT", "MONTHLY_SUBSCRIPTION"]),
+    projectType: z.enum(["SOFTWARE_PRODUCT", "CLIENT_SERVICE", "INTERNAL_TOOL", "INFRASTRUCTURE", "SUPPORT", "OTHER"]).default("CLIENT_SERVICE"),
+    paymentType: z.enum(["PRODUCT", "SUPPORT"]),
     amount: z.coerce.number().positive("Amount must be greater than zero."),
     advancePercent: z.coerce.number().min(0).max(100).optional(),
     advanceAmount: z.coerce.number().min(0).optional(),
@@ -121,44 +121,6 @@ export const paymentStatusSchema = z
     }
   });
 
-export const assetSchema = z.object({
-  id: optionalCuid,
-  clientId: z.string().cuid("Select a client."),
-  name: z.string().trim().min(2, "Asset name is required."),
-  type: z.enum(["DOMAIN", "VPS_SERVER", "CLOUD_HOSTING", "MAILBOX_EMAIL", "SAAS_SUBSCRIPTION", "SSL", "MAINTENANCE_SUPPORT", "OTHER_RECURRING_SERVICE"]),
-  provider: z.string().trim().optional(),
-  providerAccountReference: z.string().trim().optional(),
-  purchaseDate: optionalDate,
-  renewalDate: optionalDate,
-  billingFrequency: z.enum(["MONTHLY", "YEARLY", "ONE_TIME", "QUARTERLY", "CUSTOM"]),
-  internalCost: money,
-  clientCharge: money,
-  status: z.enum(["ACTIVE", "INACTIVE", "EXPIRING", "EXPIRED", "CANCELLED"]),
-  autoRenewal: z.coerce.boolean().default(false),
-  alertDays: z.coerce.number().int().min(1).max(365).default(30),
-  notes: z.string().trim().optional()
-});
-
-export const renewalSchema = z.object({
-  assetId: z.string().cuid(),
-  dateRenewed: z.coerce.date(),
-  newRenewalDate: z.coerce.date(),
-  cost: money,
-  clientCharge: money,
-  notes: z.string().trim().optional()
-});
-
-export const taskSchema = z.object({
-  id: optionalCuid,
-  title: z.string().trim().min(2, "Task title is required."),
-  description: z.string().trim().optional(),
-  status: z.enum(["TODO", "IN_PROGRESS", "BLOCKED", "DONE", "CANCELLED"]),
-  priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
-  dueDate: optionalDate,
-  clientId: z.string().cuid().optional().or(z.literal("")),
-  projectId: z.string().cuid().optional().or(z.literal(""))
-});
-
 export const noteSchema = z.object({
   entityType: z.enum(["CLIENT", "PROJECT", "INVOICE", "PAYMENT", "ASSET", "TASK"]),
   entityId: z.string().min(1),
@@ -196,8 +158,5 @@ export type MilestoneInput = z.infer<typeof milestoneSchema>;
 export type PaymentInput = z.infer<typeof paymentSchema>;
 export type PaymentRequestInput = z.infer<typeof paymentRequestSchema>;
 export type PaymentStatusInput = z.infer<typeof paymentStatusSchema>;
-export type AssetInput = z.infer<typeof assetSchema>;
-export type RenewalInput = z.infer<typeof renewalSchema>;
-export type TaskInput = z.infer<typeof taskSchema>;
 export type RevenueRecordInput = z.infer<typeof revenueRecordSchema>;
 export type CostRecordInput = z.infer<typeof costRecordSchema>;

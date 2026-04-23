@@ -60,7 +60,6 @@ export function InvoiceForm({ clients, defaultValues }: InvoiceFormProps) {
         })) ?? [{ title: "", description: "", quantity: 1, unitPrice: 0 }]
     }
   });
-  const type = form.watch("type");
   const items = form.watch("items");
   const { fields, append, remove, replace } = useFieldArray({
     control: form.control,
@@ -68,20 +67,12 @@ export function InvoiceForm({ clients, defaultValues }: InvoiceFormProps) {
   });
 
   useEffect(() => {
-    if (type === "SUBSCRIPTION") {
-      replace([]);
-      return;
-    }
-
     if (fields.length === 0) {
       replace([{ title: "", description: "", quantity: 1, unitPrice: 0 }]);
     }
-  }, [fields.length, replace, type]);
+  }, [fields.length, replace]);
 
-  const estimatedTotal =
-    type === "DEVELOPMENT"
-      ? items.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0), 0)
-      : 0;
+  const estimatedTotal = items.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0), 0);
 
   const onSubmit = form.handleSubmit((values) => {
     startTransition(async () => {
@@ -117,7 +108,6 @@ export function InvoiceForm({ clients, defaultValues }: InvoiceFormProps) {
         <Field error={form.formState.errors.type?.message} label="Invoice Type">
           <Select {...form.register("type")}>
             <option value="DEVELOPMENT">Development</option>
-            <option value="SUBSCRIPTION">Subscription</option>
             <option value="SERVICE">Service</option>
             <option value="HOSTING">Hosting/server</option>
             <option value="DOMAIN">Domain</option>
@@ -134,12 +124,12 @@ export function InvoiceForm({ clients, defaultValues }: InvoiceFormProps) {
         </Field>
       </div>
 
-      {type === "DEVELOPMENT" ? (
+      {(
         <div className="grid gap-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-semibold text-slate-800">Invoice Items</h3>
-              <p className="text-sm text-slate-500">Development drafts are calculated from these line items.</p>
+              <p className="text-sm text-slate-500">Drafts are calculated from these line items.</p>
             </div>
             <Button
               onClick={() => append({ title: "", description: "", quantity: 1, unitPrice: 0 })}
@@ -186,10 +176,6 @@ export function InvoiceForm({ clients, defaultValues }: InvoiceFormProps) {
           <div className="rounded-2xl bg-mist px-4 py-3 text-sm font-medium text-slate-700">
             Draft total: {formatCurrency(estimatedTotal)}
           </div>
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-dashed border-accent/30 bg-mist px-4 py-5 text-sm text-slate-700">
-          Subscription invoices pull all subscriptions for the selected client when you generate the invoice. A 25% service tax is applied automatically.
         </div>
       )}
 

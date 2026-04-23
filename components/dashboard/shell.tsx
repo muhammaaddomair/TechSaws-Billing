@@ -6,19 +6,15 @@ import { usePathname } from "next/navigation";
 import {
   Bell,
   BriefcaseBusiness,
-  CalendarClock,
   ChartNoAxesColumn,
-  ClipboardList,
   CreditCard,
   FileSpreadsheet,
-  History,
   LayoutDashboard,
-  PackageCheck,
   Search,
   Settings,
   Users
 } from "lucide-react";
-import { TechSawsLogo } from "@/components/brand/logo";
+import { TechSawsBrand } from "@/components/brand/logo";
 import { LogoutButton } from "@/components/dashboard/logout-button";
 import { cn } from "@/lib/utils";
 
@@ -29,10 +25,6 @@ const tabs: Array<{ href: Route; label: string; icon: typeof Users; short: strin
   { href: "/dashboard/projects", label: "Projects", icon: BriefcaseBusiness, short: "PR" },
   { href: "/dashboard/finance", label: "Revenue & Finance", icon: ChartNoAxesColumn, short: "FI" },
   { href: "/dashboard/invoices", label: "Invoices", icon: FileSpreadsheet, short: "IN" },
-  { href: "/dashboard/assets", label: "Assets & Subscriptions", icon: PackageCheck, short: "AS" },
-  { href: "/dashboard/tasks", label: "Tasks", icon: ClipboardList, short: "TK" },
-  { href: "/dashboard/deadlines", label: "Deadlines", icon: CalendarClock, short: "DL" },
-  { href: "/dashboard/activity", label: "Activity / Logs", icon: History, short: "AC" },
   { href: "/dashboard/settings", label: "Settings", icon: Settings, short: "SE" }
 ];
 
@@ -54,7 +46,7 @@ export function DashboardShell({
       <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[248px_1fr]">
         <aside className="hidden bg-black px-5 py-6 lg:flex lg:flex-col lg:justify-between">
           <div className="flex flex-col gap-6">
-            <TechSawsLogo priority size={56} />
+            <TechSawsBrand inverse priority />
             <nav className="flex flex-col gap-3">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
@@ -94,18 +86,14 @@ export function DashboardShell({
           <header className="mb-6 rounded-[34px] bg-white px-5 py-4 shadow-[0_12px_50px_rgba(15,23,42,0.08)] sm:px-6">
             <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex items-center gap-4 lg:hidden">
-                <TechSawsLogo size={52} />
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">TechSaws</p>
-                <p className="text-lg font-semibold text-slate-950">Operations Workspace</p>
-                </div>
+                <TechSawsBrand logoSize={64} priority />
               </div>
 
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Control Room</p>
                 <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">TechSaws operations command center</h1>
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                  Track clients, projects, revenue, costs, assets, invoices, payments, deadlines, and internal activity from one connected workspace.
+                  Track clients, projects, revenue, costs, invoices, and payments from one connected workspace.
                 </p>
               </div>
 

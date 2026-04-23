@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { GenerateInvoiceButton, MarkInvoicePaidButton } from "@/components/dashboard/generate-invoice-button";
+import { MarkInvoicePaidButton } from "@/components/dashboard/generate-invoice-button";
+import { DownloadInvoicePdfButton } from "@/components/dashboard/download-invoice-pdf-button";
 import { PrintButton } from "@/components/dashboard/print-button";
+import { InvoiceEmailButton } from "@/components/forms/manual-invoice-modal";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { getInvoiceDetail } from "@/lib/data";
@@ -30,9 +32,10 @@ export default async function InvoiceDetailPage({
           </Link>
           <h2 className="mt-2 text-2xl font-semibold text-ink">Invoice #{invoice.id.slice(-8).toUpperCase()}</h2>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="grid w-40 gap-2 sm:w-auto sm:grid-flow-col sm:auto-cols-max sm:items-start">
+          <DownloadInvoicePdfButton invoiceId={invoice.id} invoiceNumber={invoice.invoiceNumber} variant="secondary" />
+          <InvoiceEmailButton invoiceId={invoice.id} />
           <PrintButton />
-          {invoice.status === "DRAFT" ? <GenerateInvoiceButton invoiceId={invoice.id} /> : null}
           {invoice.status === "GENERATED" ? <MarkInvoicePaidButton invoiceId={invoice.id} /> : null}
         </div>
       </div>
@@ -43,7 +46,7 @@ export default async function InvoiceDetailPage({
             <p className="text-sm uppercase tracking-[0.26em] text-slate-500">Invoice</p>
             <h1 className="mt-3 text-4xl font-semibold text-ink">TechSaws Billing</h1>
             <p className="mt-3 max-w-xl text-sm text-slate-600">
-              Print-ready invoice for {invoice.type.toLowerCase()} billing. Subscription invoices include the mandated 25% service tax.
+              Print-ready invoice for {invoice.type.toLowerCase()} billing.
             </p>
           </div>
           <div className="text-right">

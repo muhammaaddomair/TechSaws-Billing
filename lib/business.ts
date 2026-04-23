@@ -88,27 +88,6 @@ export function daysBetween(from: Date | string, to = new Date()) {
   return Math.ceil((start - end) / 86_400_000);
 }
 
-export function isDueSoon(date: Date | string | null | undefined, thresholdDays = 30, today = new Date()) {
-  if (!date) {
-    return false;
-  }
-
-  const days = daysBetween(date, today);
-  return days >= 0 && days <= thresholdDays;
-}
-
-export function assetMargin(cost: number, charge: number) {
-  return roundMoney(charge - cost);
-}
-
-export function isUnprofitableAsset(cost: number, charge: number, minimumMarginPercent = 10) {
-  if (charge <= cost) {
-    return true;
-  }
-
-  return marginPercent(charge, cost) < minimumMarginPercent;
-}
-
 export function calculateHealthScore(input: HealthInput) {
   let score = 100;
   score -= input.overdueInvoices * 15;

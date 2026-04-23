@@ -1,8 +1,9 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { ReceiptText } from "lucide-react";
-import { InvoiceEmailButton, InvoicePdfLink, ManualInvoiceModal } from "@/components/forms/manual-invoice-modal";
+import { InvoiceEmailButton, ManualInvoiceModal } from "@/components/forms/manual-invoice-modal";
 import { PaymentStatusControl } from "@/components/forms/operation-forms";
+import { DownloadInvoicePdfButton } from "@/components/dashboard/download-invoice-pdf-button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { getDashboardOverview, getInvoices } from "@/lib/data";
@@ -59,7 +60,6 @@ export default async function InvoicesPage({
               >
                 <option value="">All types</option>
                 <option value="DEVELOPMENT">Software</option>
-                <option value="SUBSCRIPTION">Subscription</option>
                 <option value="MAINTENANCE">Support charges</option>
               </select>
             </label>
@@ -145,29 +145,36 @@ export default async function InvoicesPage({
                       <td className="px-4 py-4 font-semibold text-slate-900">{formatCurrency(invoice.finalAmount)}</td>
                       <td className="px-4 py-4">{invoice.dueDate ? formatDate(invoice.dueDate) : "-"}</td>
                       <td className="px-4 py-4"><PaymentStatusControl invoice={invoice} /></td>
-                      <td className="rounded-r-2xl px-4 py-4">
-                        <div className="flex flex-wrap gap-2">
+                      <td className="rounded-r-2xl px-3 py-4 align-top">
+                        <div className="grid w-36 gap-2">
+                          <div className="grid gap-2">
+                            <DownloadInvoicePdfButton invoiceId={invoice.id} invoiceNumber={invoice.invoiceNumber} />
+                            <InvoiceEmailButton invoiceId={invoice.id} />
+                          </div>
                           <ManualInvoiceModal
                             mode="edit"
                             defaultValues={{
                               id: invoice.id,
+                              invoiceNumber: invoice.invoiceNumber,
                               clientName: invoice.clientName,
                               email: invoice.clientEmail.endsWith("@internal.local") ? "" : invoice.clientEmail,
                               companyName: invoice.companyName,
-                              totalProjectCost: invoice.projectCost || invoice.totalAmount,
-                              advancePercent: invoice.advancePercent ?? 0,
-                              advanceAmount: invoice.advanceAmount,
-                              timeline: invoice.timeline ?? "",
-                              projectType: invoice.projectName ?? invoice.type,
-                              chargeType: invoice.type === "SUBSCRIPTION" ? "SUBSCRIPTION" : invoice.type === "MAINTENANCE" ? "MAINTENANCE" : "DEVELOPMENT",
-                              billingMode: invoice.type === "SUBSCRIPTION" ? "MONTHLY" : "ONE_TIME",
-                              paidAmount: invoice.amountPaid,
                               issueDate: invoice.issueDate,
-                              dueDate: invoice.dueDate ?? undefined
+                              dueDate: invoice.dueDate ?? undefined,
+                              subtotal: invoice.totalAmount,
+                              taxPercent: invoice.totalAmount > 0 ? Number(((invoice.taxAmount / invoice.totalAmount) * 100).toFixed(2)) : 0,
+                              discountAmount: 0,
+                              totalAmount: invoice.finalAmount,
+                              items: [
+                                {
+                                  description: invoice.projectName ?? invoice.type,
+                                  quantity: 1,
+                                  unitPrice: invoice.totalAmount,
+                                  amount: invoice.finalAmount
+                                }
+                              ]
                             }}
                           />
-                          <InvoicePdfLink href={`/dashboard/invoices/${invoice.id}`} />
-                          <InvoiceEmailButton invoiceId={invoice.id} />
                         </div>
                       </td>
                     </tr>

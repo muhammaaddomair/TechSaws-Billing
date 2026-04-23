@@ -4,3 +4,5 @@ node_modules
 .env.local
 coverage
 dist
+generated/prisma/query_engine-windows.dll.node.tmp*
+tsconfig.tsbuildinfo

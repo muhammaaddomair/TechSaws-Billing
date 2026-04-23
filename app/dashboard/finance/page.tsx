@@ -2,16 +2,15 @@ import { ChartNoAxesColumn } from "lucide-react";
 import { FinanceRecordForms } from "@/components/forms/operation-forms";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { getAssets, getClientOptions, getFinanceSummary, getProjects } from "@/lib/data";
+import { getClientOptions, getFinanceSummary, getProjects } from "@/lib/data";
 import { costCategories, labelFor, revenueCategories } from "@/lib/constants";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 export default async function FinancePage() {
-  const [clients, projects, assets, finance] = await Promise.all([getClientOptions(), getProjects(), getAssets(), getFinanceSummary()]);
+  const [clients, projects, finance] = await Promise.all([getClientOptions(), getProjects(), getFinanceSummary()]);
   const projectOptions = projects.map((project) => ({ id: project.id, name: project.name, clientId: project.clientId }));
-  const assetOptions = assets.map((asset) => ({ id: asset.id, name: asset.name, clientId: asset.clientId }));
 
   return (
     <div className="grid gap-6">
@@ -20,7 +19,6 @@ export default async function FinancePage() {
         <Metric label="Costs" value={formatCurrency(finance.costTotal)} />
         <Metric label="Profit" value={formatCurrency(finance.profit)} tone={finance.profit >= 0 ? "success" : "danger"} />
         <Metric label="Margin" value={formatPercent(finance.marginPercent)} />
-        <Metric label="MRR / ARR" value={`${formatCurrency(finance.mrr)} / ${formatCurrency(finance.arr)}`} />
       </div>
 
       <Card className="rounded-[32px] bg-[#f7f2ec]">
@@ -28,7 +26,7 @@ export default async function FinancePage() {
           <ChartNoAxesColumn className="h-3.5 w-3.5" />
           Revenue & Finance
         </div>
-        <FinanceRecordForms assets={assetOptions} clients={clients} projects={projectOptions} />
+        <FinanceRecordForms clients={clients} projects={projectOptions} />
       </Card>
 
       <div className="grid gap-6 xl:grid-cols-2">

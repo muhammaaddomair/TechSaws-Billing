@@ -1,4 +1,6 @@
 import { CreditCard } from "lucide-react";
+import { DownloadInvoicePdfButton } from "@/components/dashboard/download-invoice-pdf-button";
+import { InvoiceEmailButton } from "@/components/forms/manual-invoice-modal";
 import { PaymentRequestModal, PaymentStatusControl } from "@/components/forms/operation-forms";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -67,7 +69,6 @@ export default async function PaymentsPage({
                 <option value="">All types</option>
                 <option value="DEVELOPMENT">Product</option>
                 <option value="MAINTENANCE">Support</option>
-                <option value="SUBSCRIPTION">Monthly subscription</option>
               </select>
               <select className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-accent" defaultValue={paymentState} name="paymentState">
                 <option value="">All statuses</option>
@@ -98,11 +99,12 @@ export default async function PaymentsPage({
                 <th className="px-4">Due</th>
                 <th className="px-4">Due date</th>
                 <th className="px-4">Payment status</th>
+                <th className="px-4">Actions</th>
               </tr>
             </thead>
             <tbody>
               {invoices.length === 0 ? (
-                <tr><td className="px-4 py-10 text-center text-sm text-slate-500" colSpan={7}>No payments match the current filters.</td></tr>
+                <tr><td className="px-4 py-10 text-center text-sm text-slate-500" colSpan={8}>No payments match the current filters.</td></tr>
               ) : invoices.map((invoice) => {
                 const days = dayDiff(invoice.dueDate);
                 const overdue = invoice.balanceAmount > 0 && days !== null && days < 0;
@@ -114,7 +116,7 @@ export default async function PaymentsPage({
                       <div className="font-semibold text-slate-950">{invoice.companyName}</div>
                       <div className="text-slate-500">{invoice.projectName ?? invoice.invoiceNumber}</div>
                     </td>
-                    <td className="px-4 py-4">{invoice.type === "DEVELOPMENT" ? "Product" : invoice.type === "MAINTENANCE" ? "Support" : invoice.type === "SUBSCRIPTION" ? "Monthly subscription" : invoice.type}</td>
+                    <td className="px-4 py-4">{invoice.type === "DEVELOPMENT" ? "Product" : invoice.type === "MAINTENANCE" ? "Support" : invoice.type}</td>
                     <td className="px-4 py-4 font-semibold text-slate-950">{formatCurrency(invoice.finalAmount)}</td>
                     <td className="px-4 py-4"><Badge tone={invoice.balanceAmount <= 0 ? "success" : partial ? "info" : "default"}>{formatCurrency(invoice.amountPaid)}</Badge></td>
                     <td className="px-4 py-4"><Badge tone={overdue ? "danger" : invoice.balanceAmount > 0 ? "warning" : "success"}>{formatCurrency(invoice.balanceAmount)}</Badge></td>
@@ -122,8 +124,14 @@ export default async function PaymentsPage({
                       {invoice.dueDate ? formatDate(invoice.dueDate) : "-"}
                       {overdue ? <div className="mt-1 text-xs font-semibold text-rose-600">Due by {Math.abs(days ?? 0)} days</div> : null}
                     </td>
-                    <td className="rounded-r-2xl px-4 py-4">
+                    <td className="px-4 py-4">
                       <PaymentStatusControl invoice={invoice} />
+                    </td>
+                    <td className="rounded-r-2xl px-3 py-4 align-top">
+                      <div className="grid w-36 gap-2">
+                        <DownloadInvoicePdfButton invoiceId={invoice.id} invoiceNumber={invoice.invoiceNumber} />
+                        <InvoiceEmailButton invoiceId={invoice.id} />
+                      </div>
                     </td>
                   </tr>
                 );
